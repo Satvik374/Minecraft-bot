@@ -1,4 +1,4 @@
-modules = ["nodejs-20"]
+modules = ["nodejs-20", "postgresql-16"]
 
 [nix]
 channel = "stable-24_05"
@@ -17,7 +17,7 @@ args = "minecraft_bot_test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "UptimeRobot Bot"
+args = "Database Bot"
 
 [[workflows.workflow]]
 name = "minecraft_bot_test"
@@ -28,12 +28,12 @@ task = "shell.exec"
 args = "npm install mineflayer winston && node start.js --help"
 
 [[workflows.workflow]]
-name = "UptimeRobot Bot"
+name = "Database Bot"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "MINECRAFT_HOST=GANG_WARS.aternos.me MINECRAFT_PORT=50466 MINECRAFT_USERNAME=AIPlayer node bot-with-web.js"
+args = "MINECRAFT_HOST=GANG_WARS.aternos.me MINECRAFT_PORT=50466 MINECRAFT_USERNAME=AIPlayer node bot-with-database.js"
 waitForPort = 5000
 
 [[ports]]

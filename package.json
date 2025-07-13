@@ -10,8 +10,12 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.1",
+    "drizzle-kit": "^0.31.4",
+    "drizzle-orm": "^0.44.2",
     "mineflayer": "^4.25.0",
     "openai": "^5.9.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "ws": "^8.18.3"
   }
 }
