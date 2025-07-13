@@ -3,22 +3,33 @@
 const mineflayer = require('mineflayer');
 const logger = require('./utils/logger');
 const http = require('http');
+const OpenAI = require('openai');
 
-// Database integration
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-const { drizzle } = require('drizzle-orm/neon-serverless');
-const ws = require('ws');
+// Database integration - optional
+let storage = null;
+try {
+    if (process.env.DATABASE_URL) {
+        storage = require('./server/storage').storage;
+    }
+} catch (error) {
+    // Database not available, continue without it
+    storage = null;
+}
 
-// Configure neon
-neonConfig.webSocketConstructor = ws;
+// Initialize OpenAI for ChatGPT integration  
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
 
-let db = null;
-if (process.env.DATABASE_URL) {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    db = drizzle({ client: pool });
+// Chat history for context
+const chatHistory = new Map(); // playerName -> array of messages
+
+// Check if database is available
+const hasDatabase = !!storage;
+if (hasDatabase) {
     logger.info('📊 Database connected successfully');
 } else {
-    logger.warn('⚠️  No database URL found, running without database logging');
+    logger.warn('⚠️  Database not available, running without database logging');
 }
 
 console.log('='.repeat(60));
@@ -48,7 +59,8 @@ console.log(`🎯 Target Server: ${serverHost}:${serverPort}`);
 console.log(`👤 AI Bot Base Username: ${baseUsername}`);
 console.log(`🌐 Web Server Port: ${webPort}`);
 console.log(`🔄 Username Pool: ${usernamePool.length} usernames available`);
-console.log(`📊 Database: ${db ? 'ENABLED' : 'DISABLED'}`);
+console.log(`📊 Database: ${hasDatabase ? 'ENABLED' : 'DISABLED'}`);
+console.log(`🤖 ChatGPT: ${process.env.OPENAI_API_KEY ? 'ENABLED' : 'DISABLED'}`);
 console.log('');
 
 let bot = null;
@@ -78,88 +90,99 @@ let sessionStats = {
     startTime: Date.now()
 };
 
-// Database helper functions
+// Simplified database helper functions
 async function createBotSession() {
-    if (!db) return null;
+    if (!hasDatabase) return null;
     
     try {
-        const result = await db.query(`
-            INSERT INTO bot_sessions (username, server_host, server_port, start_time, is_active)
-            VALUES ($1, $2, $3, NOW(), true)
-            RETURNING id
-        `, [currentUsername, serverHost, serverPort]);
-        
-        currentSessionId = result.rows[0]?.id;
-        botStatus.totalSessions++;
-        logger.info(`📊 Created database session ${currentSessionId}`);
-        return currentSessionId;
+        // Use storage if available
+        if (storage) {
+            const session = await storage.createBotSession({
+                username: currentUsername,
+                serverHost: serverHost,
+                serverPort: serverPort,
+                startTime: new Date(),
+                isActive: true
+            });
+            currentSessionId = session.id;
+            botStatus.totalSessions++;
+            logger.info(`📊 Created database session ${currentSessionId}`);
+            return currentSessionId;
+        }
     } catch (error) {
-        logger.error(`Database session creation failed: ${error.message}`);
-        return null;
+        logger.debug(`Database session creation: ${error.message}`);
     }
+    return null;
 }
 
 async function endBotSession(reason = 'disconnect') {
-    if (!db || !currentSessionId) return;
+    if (!hasDatabase || !currentSessionId) return;
     
     try {
-        await db.query(`
-            UPDATE bot_sessions 
-            SET end_time = NOW(), is_active = false, disconnect_reason = $1, reconnect_attempts = $2
-            WHERE id = $3
-        `, [reason, reconnectAttempts, currentSessionId]);
-        
-        // Update session stats
-        const uptime = Math.floor((Date.now() - sessionStats.startTime) / 1000);
-        await db.query(`
-            INSERT INTO bot_stats (session_id, total_chat_messages, total_players_interacted, uptime)
-            VALUES ($1, $2, $3, $4)
-        `, [currentSessionId, sessionStats.chatMessagesSent, sessionStats.playersInteracted.size, uptime]);
-        
-        logger.info(`📊 Ended database session ${currentSessionId}`);
-        currentSessionId = null;
+        if (storage) {
+            await storage.endCurrentSession(reason);
+            logger.info(`📊 Ended database session ${currentSessionId}`);
+            currentSessionId = null;
+        }
     } catch (error) {
-        logger.error(`Database session end failed: ${error.message}`);
+        logger.debug(`Database session end: ${error.message}`);
     }
 }
 
 async function logPlayerInteraction(playerName, messageType, message, botResponse = null) {
-    if (!db || !currentSessionId) return;
+    if (!hasDatabase || !currentSessionId) return;
     
     try {
-        await db.query(`
-            INSERT INTO player_interactions (session_id, player_name, message_type, message, bot_response)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [currentSessionId, playerName, messageType, message, botResponse]);
-        
-        sessionStats.playersInteracted.add(playerName);
-        botStatus.totalPlayersInteracted = sessionStats.playersInteracted.size;
+        if (storage) {
+            await storage.logPlayerInteraction({
+                sessionId: currentSessionId,
+                playerName: playerName,
+                messageType: messageType,
+                message: message,
+                botResponse: botResponse,
+                timestamp: new Date()
+            });
+            sessionStats.playersInteracted.add(playerName);
+            botStatus.totalPlayersInteracted = sessionStats.playersInteracted.size;
+        }
     } catch (error) {
-        logger.error(`Database interaction logging failed: ${error.message}`);
+        logger.debug(`Database interaction logging: ${error.message}`);
     }
 }
 
 async function updateServerStatus(isOnline, playerCount = 0, errorMessage = null) {
-    if (!db) return;
+    if (!hasDatabase) return;
     
     try {
-        await db.query(`
-            INSERT INTO server_status (server_host, server_port, is_online, player_count, error_message)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [serverHost, serverPort, isOnline, playerCount, errorMessage]);
+        if (storage) {
+            await storage.updateServerStatus({
+                serverHost: serverHost,
+                serverPort: serverPort,
+                isOnline: isOnline,
+                playerCount: playerCount,
+                errorMessage: errorMessage,
+                timestamp: new Date()
+            });
+        }
     } catch (error) {
         logger.debug(`Database server status update: ${error.message}`);
     }
 }
 
 async function logUsernameUsage(username, wasBanned = false, banReason = null) {
-    if (!db) return;
+    if (!hasDatabase) return;
     
     try {
-        await db.query(`
-            INSERT INTO username_history (username, server_host, server_port, was_banned, ban_reason)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [username, serverHost, serverPort, wasBanned, banReason]);
+        if (storage) {
+            await storage.logUsernameUsage({
+                username: username,
+                serverHost: serverHost,
+                serverPort: serverPort,
+                wasBanned: wasBanned,
+                banReason: banReason,
+                timestamp: new Date()
+            });
+        }
     } catch (error) {
         logger.debug(`Database username logging: ${error.message}`);
     }
@@ -492,19 +515,33 @@ function createBot() {
         // Log player join
         await logPlayerInteraction(player.username, 'join', null);
         
-        setTimeout(() => {
-            const welcomes = [
-                `welcome to the server ${player.username}! hope you have fun here!`,
-                `hey ${player.username}! welcome! nice to meet you!`,
-                `welcome ${player.username}! this is a great server to play on!`,
-                `hi ${player.username}! welcome to our community!`,
-                `${player.username} welcome! let me know if you need any help!`
-            ];
-            const response = welcomes[Math.floor(Math.random() * welcomes.length)];
-            sendIntelligentChat(response);
-            
-            // Log bot response
-            logPlayerInteraction(player.username, 'welcome', null, response);
+        setTimeout(async () => {
+            try {
+                // Use ChatGPT for personalized welcome message
+                const response = await openai.chat.completions.create({
+                    model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are ${currentUsername}, a friendly player on a Minecraft server. Generate a short, warm welcome message (under 50 characters) for a new player named ${player.username}. Be casual and friendly like a real player.`
+                        }
+                    ],
+                    max_tokens: 50,
+                    temperature: 0.8
+                });
+                
+                const welcomeMessage = response.choices[0].message.content.trim();
+                await sendIntelligentChat(welcomeMessage);
+                
+                // Log bot response
+                await logPlayerInteraction(player.username, 'welcome', null, welcomeMessage);
+                
+            } catch (error) {
+                // Fallback welcome if ChatGPT fails
+                const fallbackWelcome = `welcome ${player.username}! nice to meet you!`;
+                await sendIntelligentChat(fallbackWelcome);
+                await logPlayerInteraction(player.username, 'welcome', null, fallbackWelcome);
+            }
         }, 1500 + Math.random() * 2500);
     });
 
@@ -607,8 +644,70 @@ function scheduleReconnect() {
     }, delay);
 }
 
-// Enhanced chat function with database logging
-async function sendIntelligentChat(message) {
+// ChatGPT integration function
+async function getChatGPTResponse(playerName, message) {
+    try {
+        // Get or create chat history for this player
+        if (!chatHistory.has(playerName)) {
+            chatHistory.set(playerName, []);
+        }
+        
+        const playerHistory = chatHistory.get(playerName);
+        
+        // Add player message to history
+        playerHistory.push({ role: 'user', content: `${playerName}: ${message}` });
+        
+        // Keep only last 10 messages for context (to manage API costs)
+        if (playerHistory.length > 10) {
+            playerHistory.splice(0, playerHistory.length - 10);
+        }
+        
+        // Create messages array for ChatGPT
+        const messages = [
+            {
+                role: 'system',
+                content: `You are ${currentUsername}, a friendly AI player in a Minecraft server. You should:
+- Respond naturally like a real player
+- Keep responses short (under 50 characters for Minecraft chat)
+- Be helpful, friendly, and engaging
+- Talk about Minecraft activities like building, mining, crafting
+- Use casual gaming language
+- Remember you're playing Minecraft with ${playerName}
+- Don't mention you're an AI unless directly asked`
+            },
+            ...playerHistory
+        ];
+        
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+            messages: messages,
+            max_tokens: 60,
+            temperature: 0.8
+        });
+        
+        const aiResponse = response.choices[0].message.content.trim();
+        
+        // Add AI response to history
+        playerHistory.push({ role: 'assistant', content: aiResponse });
+        
+        return aiResponse;
+        
+    } catch (error) {
+        logger.error(`ChatGPT API error: ${error.message}`);
+        // Fallback to simple responses if ChatGPT fails
+        const fallbackResponses = [
+            `hey ${playerName}! how are you doing?`,
+            `hi ${playerName}! what's up?`,
+            `cool ${playerName}! tell me more`,
+            `awesome ${playerName}! that sounds fun!`,
+            `nice ${playerName}! what are you building?`
+        ];
+        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
+}
+
+// Enhanced chat function with ChatGPT and database logging
+async function sendIntelligentChat(message, isResponseTo = null) {
     if (!bot || !message) return;
     
     const currentTime = Date.now();
@@ -678,24 +777,54 @@ function startKeepAliveActivities() {
     logger.info('🔄 Keep-alive activities started');
 }
 
-// AI behaviors with database logging
+// AI behaviors with ChatGPT-enhanced random chat
 function startAIBehaviors() {
-    logger.info('🧠 Starting AI behaviors...');
+    logger.info('🧠 Starting AI behaviors with ChatGPT...');
     
-    setInterval(() => {
+    setInterval(async () => {
         if (bot && Math.random() < 0.3) {
-            const messages = [
-                'hey everyone! how is everyone doing today?',
-                'this server has such a great community!',
-                'anyone need help with anything? i am happy to assist!',
-                'love meeting new players here!',
-                'keeping the server active! hope everyone is having fun!'
-            ];
-            sendIntelligentChat(messages[Math.floor(Math.random() * messages.length)]);
+            try {
+                // Use ChatGPT for more natural random messages
+                const randomTopics = [
+                    'general chat about minecraft',
+                    'asking about building projects',
+                    'talking about mining adventures',
+                    'discussing server community',
+                    'offering help to players'
+                ];
+                
+                const topic = randomTopics[Math.floor(Math.random() * randomTopics.length)];
+                
+                const response = await openai.chat.completions.create({
+                    model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are ${currentUsername}, a friendly player on a Minecraft server. Generate a short, casual message (under 50 characters) about: ${topic}. Sound like a real player, be friendly and engaging.`
+                        }
+                    ],
+                    max_tokens: 50,
+                    temperature: 0.9
+                });
+                
+                const aiMessage = response.choices[0].message.content.trim();
+                await sendIntelligentChat(aiMessage);
+                
+            } catch (error) {
+                // Fallback to simple messages if ChatGPT fails
+                const fallbackMessages = [
+                    'hey everyone! how is everyone doing today?',
+                    'this server has such a great community!',
+                    'anyone need help with anything? i am happy to assist!',
+                    'love meeting new players here!',
+                    'keeping the server active! hope everyone is having fun!'
+                ];
+                await sendIntelligentChat(fallbackMessages[Math.floor(Math.random() * fallbackMessages.length)]);
+            }
         }
     }, 60000 + Math.random() * 120000);
     
-    logger.info('🎮 AI behaviors activated!');
+    logger.info('🎮 AI behaviors activated with ChatGPT integration!');
 }
 
 async function handlePlayerChat(username, message) {
@@ -704,21 +833,29 @@ async function handlePlayerChat(username, message) {
     const lowerMessage = message.toLowerCase();
     logger.info(`📢 Player message from ${username}: "${message}"`);
     
-    if (Math.random() < 0.7) {
-        const replies = [
-            `hi ${username}! how are you doing?`,
-            `hey ${username}! what's up?`,
-            `interesting ${username}! tell me more`,
-            `that sounds cool ${username}!`,
-            `awesome ${username}! how can i help?`
-        ];
-        
-        const response = replies[Math.floor(Math.random() * replies.length)];
-        
+    // Respond to 90% of messages with ChatGPT (increased from 70%)
+    if (Math.random() < 0.9) {
         setTimeout(async () => {
-            await sendIntelligentChat(response);
-            // Log the interaction with bot response
-            await logPlayerInteraction(username, 'chat_response', message, response);
+            try {
+                // Get intelligent ChatGPT response
+                const chatGPTResponse = await getChatGPTResponse(username, message);
+                
+                // Send the response
+                await sendIntelligentChat(chatGPTResponse, username);
+                
+                // Log the interaction with bot response
+                await logPlayerInteraction(username, 'chat_response', message, chatGPTResponse);
+                
+                logger.info(`🤖 ChatGPT response to ${username}: "${chatGPTResponse}"`);
+                
+            } catch (error) {
+                logger.error(`Failed to generate ChatGPT response: ${error.message}`);
+                
+                // Fallback to simple response if ChatGPT fails
+                const fallbackResponse = `hey ${username}! how's it going?`;
+                await sendIntelligentChat(fallbackResponse, username);
+                await logPlayerInteraction(username, 'chat_response', message, fallbackResponse);
+            }
         }, 1000 + Math.random() * 2000);
     }
 }
