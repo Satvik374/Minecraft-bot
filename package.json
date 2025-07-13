@@ -11,6 +11,7 @@
   "description": "",
   "dependencies": {
     "mineflayer": "^4.25.0",
+    "openai": "^5.9.0",
     "winston": "^3.17.0"
   }
 }
