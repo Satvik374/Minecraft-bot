@@ -1,7 +1,7 @@
 module.exports = {
     defaultServer: {
-        host: 'localhost',
-        port: 25565
+        host: 'GANG_WARS.aternos.me',
+        port: 50466
     },
     
     bot: {
