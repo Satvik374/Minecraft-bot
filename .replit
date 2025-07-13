@@ -17,7 +17,7 @@ args = "minecraft_bot_test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "AI Bot Enhanced"
+args = "UptimeRobot Bot"
 
 [[workflows.workflow]]
 name = "minecraft_bot_test"
@@ -28,9 +28,14 @@ task = "shell.exec"
 args = "npm install mineflayer winston && node start.js --help"
 
 [[workflows.workflow]]
-name = "AI Bot Enhanced"
+name = "UptimeRobot Bot"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "MINECRAFT_HOST=GANG_WARS.aternos.me MINECRAFT_PORT=50466 MINECRAFT_USERNAME=AIPlayer node ai-bot.js"
+args = "MINECRAFT_HOST=GANG_WARS.aternos.me MINECRAFT_PORT=50466 MINECRAFT_USERNAME=AIPlayer node bot-with-web.js"
+waitForPort = 5000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
