@@ -17,7 +17,7 @@ args = "minecraft_bot_test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "AI Bot"
+args = "AI Bot Enhanced"
 
 [[workflows.workflow]]
 name = "minecraft_bot_test"
@@ -28,7 +28,7 @@ task = "shell.exec"
 args = "npm install mineflayer winston && node start.js --help"
 
 [[workflows.workflow]]
-name = "AI Bot"
+name = "AI Bot Enhanced"
 author = "agent"
 
 [[workflows.workflow.tasks]]

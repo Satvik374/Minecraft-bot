@@ -78,10 +78,17 @@ function createBot() {
 
     bot.on('playerJoined', (player) => {
         logger.info(`${player.username} joined the game`);
-        // Greet new players
+        // Greet new players with variety
         setTimeout(() => {
-            sendIntelligentChat(`welcome ${player.username}! nice to see you here`);
-        }, 2000 + Math.random() * 3000);
+            const welcomes = [
+                `welcome to the server ${player.username}! hope you have fun here!`,
+                `hey ${player.username}! welcome! nice to meet you!`,
+                `welcome ${player.username}! this is a great server to play on!`,
+                `hi ${player.username}! welcome to our community!`,
+                `${player.username} welcome! let me know if you need any help!`
+            ];
+            sendIntelligentChat(welcomes[Math.floor(Math.random() * welcomes.length)]);
+        }, 1500 + Math.random() * 2500);
     });
 
     bot.on('health', () => {
@@ -227,24 +234,36 @@ async function gatherWood() {
 }
 
 async function craftCraftingTable() {
-    if (!botState.hasWood) return;
+    if (!botState.hasWood || botState.hasCraftingTable) return;
     
     logger.info('🔨 Crafting crafting table...');
     
     try {
-        const woodItems = bot.inventory.items().filter(item => 
-            item.name.includes('log') || item.name.includes('planks'));
+        // First convert logs to planks if needed
+        const logs = bot.inventory.items().filter(item => item.name.includes('log'));
+        if (logs.length > 0 && !bot.inventory.items().some(item => item.name.includes('planks'))) {
+            const plankRecipe = bot.recipesFor(bot.registry.itemsByName.oak_planks?.id || bot.registry.itemsByName.birch_planks?.id, null, 1, null);
+            if (plankRecipe.length > 0) {
+                await bot.craft(plankRecipe[0], 4);
+                logger.info('🪵 Converted logs to planks');
+            }
+        }
         
-        if (woodItems.length > 0) {
+        // Now craft crafting table
+        const planks = bot.inventory.items().filter(item => item.name.includes('planks'));
+        if (planks.length >= 4) {
             const recipe = bot.recipesFor(bot.registry.itemsByName.crafting_table.id, null, 1, null);
             if (recipe.length > 0) {
                 await bot.craft(recipe[0], 1);
-                sendIntelligentChat('crafted a crafting table! now i can make better tools');
+                sendIntelligentChat('awesome! just made a crafting table. time to craft some tools!');
                 botState.hasCraftingTable = true;
+                botState.currentTask = 'craft_pickaxe';
             }
         }
     } catch (error) {
         logger.debug(`Failed to craft crafting table: ${error.message}`);
+        // Try a different approach or move on
+        botState.currentTask = 'gather_wood';
     }
 }
 
@@ -331,24 +350,57 @@ function intelligentMovement() {
     
     botState.isMoving = true;
     
-    // Random movement pattern
+    // More natural movement patterns
     const movements = [
         () => {
+            // Sprint forward
+            bot.setControlState('sprint', true);
             bot.setControlState('forward', true);
-            setTimeout(() => bot.setControlState('forward', false), 2000 + Math.random() * 3000);
+            setTimeout(() => {
+                bot.setControlState('forward', false);
+                bot.setControlState('sprint', false);
+            }, 1500 + Math.random() * 2000);
         },
         () => {
+            // Walk and jump
+            bot.setControlState('forward', true);
+            if (Math.random() < 0.6) {
+                setTimeout(() => {
+                    bot.setControlState('jump', true);
+                    setTimeout(() => bot.setControlState('jump', false), 100);
+                }, 500);
+            }
+            setTimeout(() => bot.setControlState('forward', false), 2000 + Math.random() * 1500);
+        },
+        () => {
+            // Turn and move
             const randomYaw = bot.entity.yaw + (Math.random() - 0.5) * Math.PI;
             bot.look(randomYaw, bot.entity.pitch);
             setTimeout(() => {
                 bot.setControlState('forward', true);
-                setTimeout(() => bot.setControlState('forward', false), 1500);
-            }, 500);
+                // Random sprint
+                if (Math.random() < 0.4) {
+                    bot.setControlState('sprint', true);
+                }
+                setTimeout(() => {
+                    bot.setControlState('forward', false);
+                    bot.setControlState('sprint', false);
+                }, 1000 + Math.random() * 2000);
+            }, 300);
         },
         () => {
-            if (bot.entity.onGround && Math.random() < 0.3) {
+            // Jump around for fun
+            if (bot.entity.onGround) {
                 bot.setControlState('jump', true);
                 setTimeout(() => bot.setControlState('jump', false), 100);
+                
+                // Sometimes double jump
+                if (Math.random() < 0.3) {
+                    setTimeout(() => {
+                        bot.setControlState('jump', true);
+                        setTimeout(() => bot.setControlState('jump', false), 100);
+                    }, 300);
+                }
             }
         }
     ];
@@ -358,7 +410,7 @@ function intelligentMovement() {
     
     setTimeout(() => {
         botState.isMoving = false;
-    }, 3000 + Math.random() * 2000);
+    }, 2000 + Math.random() * 2000);
 }
 
 function naturalLooking() {
@@ -388,44 +440,99 @@ function handlePlayerChat(username, message) {
     const currentTime = Date.now();
     
     // Don't respond too frequently
-    if (currentTime - botState.lastChatTime < 5000) return;
+    if (currentTime - botState.lastChatTime < 3000) return;
     
-    // Intelligent responses
+    // More natural and human-like responses
     const responses = {
-        'hello': () => `hey ${username}! how are you doing?`,
-        'hi': () => `hello ${username}! nice to see you here`,
-        'help': () => `what do you need help with ${username}?`,
+        'hello': () => {
+            const greetings = [
+                `hey ${username}! good to see you!`,
+                `hello ${username}! how's it going?`,
+                `hi there ${username}! what's up?`,
+                `hey ${username}! nice to meet you!`
+            ];
+            return greetings[Math.floor(Math.random() * greetings.length)];
+        },
+        'hi': () => {
+            const replies = [
+                `hi ${username}! how are you doing today?`,
+                `hey ${username}! what brings you here?`,
+                `hello ${username}! having fun on the server?`,
+                `hi there! i'm ${bot.username}, nice to meet you ${username}!`
+            ];
+            return replies[Math.floor(Math.random() * replies.length)];
+        },
+        'great': () => {
+            const positiveReplies = [
+                `that's awesome ${username}!`,
+                `glad to hear that!`,
+                `nice! i'm doing pretty good too`,
+                `that's great to hear!`
+            ];
+            return positiveReplies[Math.floor(Math.random() * positiveReplies.length)];
+        },
+        'good': () => `that's good to hear ${username}! i'm having a great time too`,
+        'help': () => `what do you need help with ${username}? i'm always happy to help!`,
         'what are you doing': () => getActivityResponse(),
         'follow me': () => {
             botState.targetPlayer = username;
             botState.currentTask = 'follow_player';
-            return `sure ${username}, i'll follow you!`;
+            return `sure thing ${username}! i'll follow you around`;
+        },
+        'stop following': () => {
+            botState.currentTask = 'exploring';
+            botState.targetPlayer = null;
+            return `alright ${username}, i'll go back to doing my own thing!`;
         },
         'stop': () => {
             botState.currentTask = 'exploring';
             botState.targetPlayer = null;
-            return 'okay, back to exploring!';
+            return 'okay! back to exploring and crafting';
         },
-        'craft': () => 'i love crafting! currently working on making tools',
-        'mine': () => 'mining is fun! looking for good spots to dig',
-        'build': () => `sounds like a cool project ${username}! what are you building?`
+        'craft': () => `yeah ${username}! crafting is so much fun. currently working on my tools`,
+        'mine': () => `mining is awesome! want to go mining together ${username}?`,
+        'build': () => `sounds amazing ${username}! what kind of build are you working on?`,
+        'food': () => `i'm a bit hungry too ${username}! know any good food spots?`,
+        'jump': () => {
+            // Make bot jump when someone mentions it
+            if (bot.entity.onGround) {
+                bot.setControlState('jump', true);
+                setTimeout(() => bot.setControlState('jump', false), 100);
+            }
+            return `jumping for you ${username}! :)`;
+        },
+        'dance': () => {
+            // Make bot do a little dance
+            bot.setControlState('jump', true);
+            setTimeout(() => bot.setControlState('jump', false), 100);
+            setTimeout(() => {
+                bot.look(bot.entity.yaw + Math.PI/2, bot.entity.pitch);
+            }, 200);
+            return `dancing time! this is fun ${username}!`;
+        }
     };
     
-    // Check if bot is mentioned
+    // Check if bot is mentioned by name
     if (lowerMessage.includes(bot.username.toLowerCase())) {
         setTimeout(() => {
-            sendIntelligentChat(`yes ${username}? what can i help you with?`);
-        }, 1000 + Math.random() * 2000);
+            const mentions = [
+                `yes ${username}? did you need something?`,
+                `hey ${username}! you called?`,
+                `what's up ${username}? how can i help?`,
+                `yes? i'm here ${username}!`
+            ];
+            sendIntelligentChat(mentions[Math.floor(Math.random() * mentions.length)]);
+        }, 800 + Math.random() * 1500);
         return;
     }
     
-    // Check for keyword responses
+    // Check for keyword responses with higher response rate
     for (const [keyword, responseFunc] of Object.entries(responses)) {
         if (lowerMessage.includes(keyword)) {
-            if (Math.random() < 0.6) { // 60% chance to respond
+            if (Math.random() < 0.75) { // 75% chance to respond
                 setTimeout(() => {
                     sendIntelligentChat(responseFunc());
-                }, 1500 + Math.random() * 3000);
+                }, 1000 + Math.random() * 2000);
             }
             break;
         }
@@ -446,18 +553,22 @@ function getActivityResponse() {
 }
 
 function randomChatting() {
-    if (!bot || Date.now() - botState.lastChatTime < 20000) return;
+    if (!bot || Date.now() - botState.lastChatTime < 15000) return;
     
-    if (Math.random() < 0.3) { // 30% chance
+    if (Math.random() < 0.4) { // 40% chance for more active chatting
         const randomMessages = [
-            'this server is pretty cool!',
-            'anyone want to team up for building?',
-            'found any good mining spots lately?',
-            'love the community here',
-            'minecraft is such a great game',
-            'working on improving my building skills',
-            'anyone know good places to find resources?',
-            'thanks for having such a welcoming server'
+            'hey everyone! how is everyone doing today?',
+            'this server has such a great community!',
+            'anyone want to go mining together?',
+            'just finished gathering some wood, feels productive!',
+            'minecraft never gets old, love this game!',
+            'working on my crafting skills, still learning!',
+            'anyone found any cool caves or structures lately?',
+            'thanks for making this such a fun server to play on!',
+            'what are you all building today?',
+            'exploring is so much fun, found some interesting spots!',
+            'love meeting new players here!',
+            'anyone need help with anything? i am happy to assist!'
         ];
         
         const message = randomMessages[Math.floor(Math.random() * randomMessages.length)];
