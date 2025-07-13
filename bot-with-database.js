@@ -54,6 +54,7 @@ console.log('');
 let bot = null;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 50;
+let isReconnecting = false;
 
 // Bot status for web server
 let botStatus = {
@@ -421,6 +422,7 @@ function createBot() {
         logger.info(`✅ AI Bot logged in successfully!`);
         logger.info(`🌍 Connected to ${serverHost}:${serverPort}`);
         reconnectAttempts = 0;
+        isReconnecting = false;
         updateBotStatus(true);
         
         // Create database session
@@ -552,6 +554,14 @@ function createBot() {
 }
 
 function scheduleReconnect() {
+    // Prevent multiple simultaneous reconnection attempts
+    if (isReconnecting) {
+        logger.debug('⚠️  Reconnection already in progress, skipping duplicate attempt');
+        return;
+    }
+    
+    isReconnecting = true;
+    
     if (reconnectAttempts >= maxReconnectAttempts) {
         logger.warn(`⚠️  Max reconnection attempts (${maxReconnectAttempts}) reached. Will keep trying with longer delays...`);
         reconnectAttempts = Math.floor(maxReconnectAttempts / 2);
@@ -573,15 +583,26 @@ function scheduleReconnect() {
     
     setTimeout(() => {
         try {
+            // Ensure only one bot exists at a time
             if (bot && typeof bot.quit === 'function') {
                 bot.quit();
             }
             bot = null;
+            
+            // Reset reconnecting flag and create new bot
+            isReconnecting = false;
             createBot();
         } catch (error) {
             logger.error(`Error during reconnection: ${error.message}`);
             bot = null;
-            setTimeout(() => scheduleReconnect(), 10000);
+            isReconnecting = false;
+            
+            // Wait before trying again, but don't create nested reconnection loop
+            setTimeout(() => {
+                if (!isReconnecting) {
+                    scheduleReconnect();
+                }
+            }, 10000);
         }
     }, delay);
 }

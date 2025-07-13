@@ -16,6 +16,7 @@ Preferred communication style: Simple, everyday language.
 - ✅ Anti-ban system - 20 username rotation, automatic ban detection (July 13, 2025)
 - ✅ Local deployment package - complete download files for 24/7 operation (July 13, 2025)
 - ✅ Smart reconnection logic - different delays for bans vs disconnections (July 13, 2025)
+- ✅ Fixed unlimited bot connection bug - only 1 bot connects at a time (July 13, 2025)
 
 ## System Architecture
 
