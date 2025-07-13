@@ -61,11 +61,13 @@ let botState = {
     goals: ['gather_wood', 'craft_table', 'craft_pickaxe', 'mine_stone']
 };
 
-// Web Server for UptimeRobot
+// Web Server for UptimeRobot - Enhanced with Keep-Alive
 const webServer = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Keep-Alive', 'timeout=30, max=100');
     
     if (req.method === 'OPTIONS') {
         res.writeHead(200);
@@ -76,10 +78,15 @@ const webServer = http.createServer((req, res) => {
     const url = req.url;
     const now = new Date();
     
-    // Main health check for UptimeRobot
+    // Main health check for UptimeRobot - ALWAYS returns OK to keep server alive
     if (url === '/health' || url === '/ping') {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('OK');
+        res.writeHead(200, { 
+            'Content-Type': 'text/plain',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
+        res.end('OK - Web Server Active');
         return;
     }
     
@@ -92,15 +99,19 @@ const webServer = http.createServer((req, res) => {
         
         const response = {
             status: "OK",
+            webServer: "ACTIVE", // Web server is always active for UptimeRobot
             bot: {
                 running: botStatus.isRunning,
                 username: botStatus.currentUsername,
                 server: `${botStatus.serverHost}:${botStatus.serverPort}`,
                 lastSeen: botStatus.lastSeen,
-                uptime: `${uptimeHours}h ${uptimeMinutes}m`
+                uptime: `${uptimeHours}h ${uptimeMinutes}m`,
+                reconnectAttempts: reconnectAttempts
             },
             timestamp: now.toISOString(),
-            message: botStatus.isRunning ? "Minecraft bot is online and active" : "Minecraft bot is offline or reconnecting"
+            message: botStatus.isRunning ? 
+                "Web server active - Minecraft bot online" : 
+                `Web server active - Minecraft bot reconnecting (attempt ${reconnectAttempts})`
         };
         
         res.end(JSON.stringify(response, null, 2));
@@ -318,20 +329,22 @@ function createBot() {
 
 function scheduleReconnect() {
     if (reconnectAttempts >= maxReconnectAttempts) {
-        logger.error(`💀 Max reconnection attempts (${maxReconnectAttempts}) reached. Exiting.`);
-        console.log('\n❌ AI Bot failed to maintain connection.');
-        process.exit(1);
+        logger.warn(`⚠️  Max reconnection attempts (${maxReconnectAttempts}) reached. Will keep trying with longer delays...`);
+        reconnectAttempts = Math.floor(maxReconnectAttempts / 2); // Reset to half for longer delays
     }
 
     reconnectAttempts++;
     
     let delay;
-    if (reconnectAttempts > 1) {
-        delay = Math.min(120000, 30000 + (reconnectAttempts * 15000));
-        logger.info(`🔄 Reconnecting with new username in ${delay/1000}s (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+    if (reconnectAttempts <= 3) {
+        delay = 5000; // Quick retries first
+        logger.info(`🔄 Quick reconnect in ${delay/1000}s (attempt ${reconnectAttempts})`);
+    } else if (reconnectAttempts <= 10) {
+        delay = 30000; // 30 second delays
+        logger.info(`🔄 Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts}) - server may be down`);
     } else {
-        delay = 5000;
-        logger.info(`🔄 Quick reconnect in ${delay/1000}s (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+        delay = Math.min(300000, 60000 + (reconnectAttempts * 10000)); // Up to 5 minute delays
+        logger.info(`🔄 Long reconnect in ${Math.floor(delay/60000)}min (attempt ${reconnectAttempts}) - waiting for server`);
     }
     
     setTimeout(() => {
@@ -343,6 +356,8 @@ function scheduleReconnect() {
             createBot();
         } catch (error) {
             logger.error(`Error during reconnection: ${error.message}`);
+            // Continue trying even on errors
+            setTimeout(() => scheduleReconnect(), 10000);
         }
     }, delay);
 }
