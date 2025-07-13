@@ -541,10 +541,39 @@ function handlePlayerChat(username, message) {
             botState.targetPlayer = null;
             return 'okay! back to exploring and crafting';
         },
-        'craft': () => `yeah ${username}! crafting is so much fun. currently working on my tools`,
-        'mine': () => `mining is awesome! want to go mining together ${username}?`,
+
+        'mine': () => {
+            botState.currentTask = 'mine_stone';
+            return `sure ${username}! let's go mining together!`;
+        },
         'build': () => `sounds amazing ${username}! what kind of build are you working on?`,
         'food': () => `i'm a bit hungry too ${username}! know any good food spots?`,
+        'creative': () => `yes ${username}! i love creative mode for building amazing things!`,
+        'dig': () => {
+            botState.currentTask = 'mine_stone';
+            return `alright ${username}! time to dig some blocks!`;
+        },
+        'explore': () => {
+            botState.currentTask = 'exploring';
+            return `great idea ${username}! let's explore the world together!`;
+        },
+        'come here': () => {
+            botState.targetPlayer = username;
+            botState.currentTask = 'follow_player';
+            return `coming ${username}! on my way!`;
+        },
+        'go': () => {
+            botState.currentTask = 'exploring';
+            return `going ${username}! adventure time!`;
+        },
+        'wood': () => {
+            botState.currentTask = 'gather_wood';
+            return `good thinking ${username}! let's get some wood!`;
+        },
+        'craft': () => {
+            botState.currentTask = 'craft_table';
+            return `yeah ${username}! crafting is so much fun. currently working on my tools`;
+        },
         'jump': () => {
             // Make bot jump when someone mentions it
             if (bot.entity.onGround) {
@@ -579,27 +608,37 @@ function handlePlayerChat(username, message) {
     }
     
     // Check for keyword responses with higher response rate
+    let foundKeywordResponse = false;
     for (const [keyword, responseFunc] of Object.entries(responses)) {
         if (lowerMessage.includes(keyword)) {
-            if (Math.random() < 0.85) { // 85% chance to respond to player messages
+            if (Math.random() < 0.90) { // 90% chance to respond to keyword messages
                 setTimeout(() => {
                     sendIntelligentChat(responseFunc());
-                }, 500 + Math.random() * 1500); // Faster response
+                    botState.lastChatTime = Date.now();
+                }, 500 + Math.random() * 1500);
             }
-            return; // Found a response, exit early
+            foundKeywordResponse = true;
+            break;
         }
     }
     
-    // Generic response to any player message (20% chance)
-    if (Math.random() < 0.2) {
+    // If no keyword match, respond to ANY player message (70% chance)
+    if (!foundKeywordResponse && Math.random() < 0.7) {
         const genericReplies = [
-            `interesting point ${username}!`,
+            `interesting ${username}! tell me more`,
             `i see what you mean ${username}`,
             `that sounds cool ${username}!`,
-            `nice one ${username}!`
+            `nice one ${username}!`,
+            `what do you think about that ${username}?`,
+            `i agree with you ${username}`,
+            `that's a good point ${username}!`,
+            `yeah ${username}, exactly!`,
+            `cool ${username}! want to team up?`,
+            `awesome ${username}! how can i help?`
         ];
         setTimeout(() => {
             sendIntelligentChat(genericReplies[Math.floor(Math.random() * genericReplies.length)]);
+            botState.lastChatTime = Date.now();
         }, 800 + Math.random() * 2000);
     }
 }
@@ -669,17 +708,24 @@ function followTargetPlayer() {
     if (targetEntity) {
         const distance = bot.entity.position.distanceTo(targetEntity.position);
         
-        if (distance > 3) {
+        if (distance > 5) {
             // Move towards the player
+            logger.debug(`Following ${botState.targetPlayer}, distance: ${distance.toFixed(1)}`);
             bot.lookAt(targetEntity.position);
             bot.setControlState('forward', true);
             
+            // Sprint if far away
+            if (distance > 8) {
+                bot.setControlState('sprint', true);
+            }
+            
             setTimeout(() => {
                 bot.setControlState('forward', false);
-            }, 1000);
-        } else if (distance > 8) {
+                bot.setControlState('sprint', false);
+            }, 1500);
+        } else if (distance > 25) {
             // Too far, stop following
-            sendIntelligentChat(`${botState.targetPlayer} you're too far! i'll explore on my own`);
+            sendIntelligentChat(`${botState.targetPlayer} you're too far away! come back if you need me`);
             botState.currentTask = 'exploring';
             botState.targetPlayer = null;
         }
