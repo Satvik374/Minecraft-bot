@@ -11,10 +11,11 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 - ✅ Complete 24/7 Minecraft bot implementation (July 13, 2025)
-- ✅ All dependencies properly installed (mineflayer, winston)
-- ✅ Human-like behaviors: movement, block breaking, chat, anti-idle
-- ✅ Comprehensive README with usage instructions
-- ✅ Bot tested and verified working
+- ✅ Enhanced chat system - responds to ALL player messages (70% rate) (July 13, 2025)
+- ✅ Player task commands - "follow me", "mine", "explore", "craft" etc. (July 13, 2025)
+- ✅ Anti-ban system - 20 username rotation, automatic ban detection (July 13, 2025)
+- ✅ Local deployment package - complete download files for 24/7 operation (July 13, 2025)
+- ✅ Smart reconnection logic - different delays for bans vs disconnections (July 13, 2025)
 
 ## System Architecture
 

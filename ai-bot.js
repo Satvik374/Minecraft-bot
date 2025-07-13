@@ -11,15 +11,27 @@ console.log('='.repeat(60));
 const args = process.argv.slice(2);
 const serverHost = args[0] || process.env.MINECRAFT_HOST || 'localhost';
 const serverPort = parseInt(args[1]) || parseInt(process.env.MINECRAFT_PORT) || 25565;
-const username = args[2] || process.env.MINECRAFT_USERNAME || 'AIPlayer';
+const baseUsername = args[2] || process.env.MINECRAFT_USERNAME || 'AIPlayer';
+
+// Username rotation system for ban evasion
+const usernamePool = [
+    'AIPlayer', 'BotHelper', 'AutoCrafter', 'MineBot', 'PlayerAI',
+    'CraftBot', 'ExploreBot', 'BuildHelper', 'GameBot', 'ServerBot',
+    'FriendlyAI', 'HelpBot', 'ChatBot', 'WorkBot', 'PlayBot',
+    'SmartBot', 'QuickBot', 'FastBot', 'CoolBot', 'NiceBot'
+];
+
+let currentUsernameIndex = 0;
+let currentUsername = baseUsername;
 
 console.log(`🎯 Target Server: ${serverHost}:${serverPort}`);
-console.log(`👤 AI Bot Username: ${username}`);
+console.log(`👤 AI Bot Base Username: ${baseUsername}`);
+console.log(`🔄 Username Pool: ${usernamePool.length} usernames available`);
 console.log('');
 
 let bot = null;
 let reconnectAttempts = 0;
-const maxReconnectAttempts = 10;
+const maxReconnectAttempts = 50; // Increased for ban evasion
 
 // AI Bot State
 let botState = {
@@ -36,7 +48,27 @@ let botState = {
     goals: ['gather_wood', 'craft_table', 'craft_pickaxe', 'mine_stone']
 };
 
+function getNextUsername() {
+    // If it's the first attempt, use the base username
+    if (reconnectAttempts === 0) {
+        currentUsername = baseUsername;
+    } else {
+        // Rotate through username pool
+        currentUsernameIndex = (currentUsernameIndex + 1) % usernamePool.length;
+        currentUsername = usernamePool[currentUsernameIndex];
+        
+        // Add random numbers for uniqueness
+        const randomSuffix = Math.floor(Math.random() * 999);
+        currentUsername = `${currentUsername}${randomSuffix}`;
+    }
+    
+    logger.info(`🔄 Using username: ${currentUsername} (attempt ${reconnectAttempts + 1})`);
+    return currentUsername;
+}
+
 function createBot() {
+    const username = getNextUsername();
+    
     const botOptions = {
         host: serverHost,
         port: serverPort,
@@ -124,6 +156,18 @@ function createBot() {
 
     bot.on('kicked', (reason) => {
         logger.warn(`👢 AI Bot was kicked: ${reason}`);
+        
+        // Check if it's a ban (common ban keywords)
+        const banKeywords = ['ban', 'banned', 'blacklist', 'prohibited', 'blocked', 'suspended'];
+        const isBanned = banKeywords.some(keyword => 
+            reason.toLowerCase().includes(keyword)
+        );
+        
+        if (isBanned) {
+            logger.warn(`🚫 Detected ban! Reason: ${reason}`);
+            logger.info(`🔄 Will reconnect with different username...`);
+        }
+        
         scheduleReconnect();
     });
 
@@ -798,9 +842,18 @@ function scheduleReconnect() {
     }
 
     reconnectAttempts++;
-    const delay = Math.min(5000 * reconnectAttempts, 60000);
     
-    logger.info(`🔄 Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+    // Different delays for potential bans vs normal disconnections
+    let delay;
+    if (reconnectAttempts > 1) {
+        // After first reconnect, assume potential ban - use longer delays
+        delay = Math.min(120000, 30000 + (reconnectAttempts * 15000)); // 30s to 2min
+        logger.info(`🔄 Reconnecting with new username in ${delay/1000}s (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+    } else {
+        // First reconnect - quick retry
+        delay = 5000;
+        logger.info(`🔄 Quick reconnect in ${delay/1000}s (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+    }
     
     setTimeout(() => {
         try {
