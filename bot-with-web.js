@@ -237,8 +237,14 @@ function createBot() {
         username: username,
         version: '1.20.1',
         auth: 'offline',
-        checkTimeoutInterval: 30000,
-        keepAlive: true
+        checkTimeoutInterval: 60000, // Increased timeout
+        keepAlive: true,
+        hideErrors: false,
+        respawn: true,
+        viewDistance: 'tiny', // Reduce load
+        chatLengthLimit: 256,
+        physicsEnabled: false, // Reduce processing
+        loadInternalPlugins: false
     };
 
     logger.info('Creating AI bot instance...');
@@ -258,6 +264,9 @@ function createBot() {
 
     bot.on('spawn', () => {
         logger.info(`AI Bot spawned at ${bot.entity.position}`);
+        
+        // Start keep-alive activities immediately
+        startKeepAliveActivities();
         
         setTimeout(() => {
             if (botState.isCreativeMode) {
@@ -349,13 +358,14 @@ function scheduleReconnect() {
     
     setTimeout(() => {
         try {
-            if (bot) {
+            if (bot && typeof bot.quit === 'function') {
                 bot.quit();
-                bot = null;
             }
+            bot = null;
             createBot();
         } catch (error) {
             logger.error(`Error during reconnection: ${error.message}`);
+            bot = null;
             // Continue trying even on errors
             setTimeout(() => scheduleReconnect(), 10000);
         }
@@ -378,17 +388,68 @@ function sendIntelligentChat(message) {
     }
 }
 
+// Keep-alive function to prevent disconnections
+function startKeepAliveActivities() {
+    if (!bot) return;
+    
+    // Movement to prevent idle kicks
+    const moveInterval = setInterval(() => {
+        if (!bot || !bot.entity) {
+            clearInterval(moveInterval);
+            return;
+        }
+        
+        try {
+            // Small movements to stay active
+            if (Math.random() < 0.5) {
+                bot.setControlState('jump', true);
+                setTimeout(() => {
+                    if (bot) bot.setControlState('jump', false);
+                }, 100);
+            } else {
+                const directions = ['forward', 'back', 'left', 'right'];
+                const direction = directions[Math.floor(Math.random() * directions.length)];
+                bot.setControlState(direction, true);
+                setTimeout(() => {
+                    if (bot) bot.setControlState(direction, false);
+                }, 200);
+            }
+        } catch (error) {
+            logger.debug(`Keep-alive movement error: ${error.message}`);
+        }
+    }, 30000 + Math.random() * 20000); // Every 30-50 seconds
+
+    // Look around to appear active
+    const lookInterval = setInterval(() => {
+        if (!bot || !bot.entity) {
+            clearInterval(lookInterval);
+            return;
+        }
+        
+        try {
+            const yaw = Math.random() * Math.PI * 2;
+            const pitch = (Math.random() - 0.5) * 0.5;
+            bot.look(yaw, pitch);
+        } catch (error) {
+            logger.debug(`Keep-alive look error: ${error.message}`);
+        }
+    }, 15000 + Math.random() * 10000); // Every 15-25 seconds
+
+    logger.info('🔄 Keep-alive activities started');
+}
+
 // Simplified behavior functions
 function startAIBehaviors() {
     logger.info('🧠 Starting AI behaviors...');
     
     setInterval(() => {
-        if (Math.random() < 0.3) {
+        if (bot && Math.random() < 0.3) {
             const messages = [
                 'hey everyone! how is everyone doing today?',
                 'this server has such a great community!',
                 'anyone need help with anything? i am happy to assist!',
-                'love meeting new players here!'
+                'love meeting new players here!',
+                'keeping the server active! hope everyone is having fun!'
             ];
             sendIntelligentChat(messages[Math.floor(Math.random() * messages.length)]);
         }
