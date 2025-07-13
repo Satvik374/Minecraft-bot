@@ -39,12 +39,16 @@ class MinecraftBot extends EventEmitter {
         
         this.bot.on('spawn', () => {
             logger.info(`Bot spawned at ${this.bot.entity.position}`);
-            logger.info(`Health: ${this.bot.health}, Food: ${this.bot.food}`);
             
-            // Initialize pathfinding
-            this.pathfinding = new SimplePathfinding(this.bot);
-            
-            this.emit('spawn');
+            // Wait a moment for health/food to be properly set
+            setTimeout(() => {
+                logger.info(`Health: ${this.bot.health || 'N/A'}, Food: ${this.bot.food || 'N/A'}`);
+                
+                // Initialize pathfinding
+                this.pathfinding = new SimplePathfinding(this.bot);
+                
+                this.emit('spawn');
+            }, 1000);
         });
         
         this.bot.on('health', () => {

@@ -17,7 +17,7 @@ args = "minecraft_bot_test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Minecraft Bot"
+args = "Stable Bot"
 
 [[workflows.workflow]]
 name = "minecraft_bot_test"
@@ -28,9 +28,9 @@ task = "shell.exec"
 args = "npm install mineflayer winston && node start.js --help"
 
 [[workflows.workflow]]
-name = "Minecraft Bot"
+name = "Stable Bot"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node start.js"
+args = "MINECRAFT_HOST=GANG_WARS.aternos.me MINECRAFT_PORT=50466 MINECRAFT_USERNAME=StableBot node simple-bot.js"

@@ -19,7 +19,10 @@ class MovementBehavior {
         // Start movement behavior after bot spawns
         this.bot.once('spawn', () => {
             logger.info('Movement behavior initialized');
-            this.startMovement();
+            // Add delay to ensure bot is fully loaded
+            setTimeout(() => {
+                this.startMovement();
+            }, 3000);
         });
     }
     

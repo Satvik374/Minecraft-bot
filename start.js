@@ -119,10 +119,15 @@ function scheduleReconnect() {
     logger.info(`🔄 Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
     
     setTimeout(() => {
-        if (bot) {
-            bot.quit();
+        try {
+            if (bot) {
+                bot.quit();
+                bot = null;
+            }
+            createBot();
+        } catch (error) {
+            logger.error(`Error during reconnection: ${error.message}`);
         }
-        createBot();
     }, delay);
 }
 
