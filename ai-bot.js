@@ -30,7 +30,9 @@ let botState = {
     hasPickaxe: false,
     isMoving: false,
     lastChatTime: 0,
+    lastMined: 0,
     targetPlayer: null,
+    isCreativeMode: true, // Creative mode enabled
     goals: ['gather_wood', 'craft_table', 'craft_pickaxe', 'mine_stone']
 };
 
@@ -63,6 +65,18 @@ function createBot() {
 
     bot.on('spawn', () => {
         logger.info(`AI Bot spawned at ${bot.entity.position}`);
+        
+        // Try to enable creative mode if possible
+        setTimeout(() => {
+            if (botState.isCreativeMode) {
+                try {
+                    bot.chat('/gamemode creative');
+                    sendIntelligentChat('switching to creative mode for better building!');
+                } catch (error) {
+                    logger.debug('Could not set creative mode');
+                }
+            }
+        }, 1000);
         
         // Initialize AI behaviors
         setTimeout(() => {
@@ -294,6 +308,21 @@ async function craftPickaxe() {
 }
 
 async function mineStone() {
+    // Less frequent mining - only mine if we haven't mined recently
+    if (botState.lastMined && Date.now() - botState.lastMined < 10000) {
+        intelligentMovement();
+        return;
+    }
+    
+    // Return to surface if too deep underground
+    if (bot.entity.position.y < 50) {
+        logger.info('🔝 Returning to surface...');
+        bot.setControlState('jump', true);
+        setTimeout(() => bot.setControlState('jump', false), 3000);
+        botState.currentTask = 'exploring';
+        return;
+    }
+    
     logger.debug('⛏️ Looking for stone to mine...');
     
     const stones = bot.findBlocks({
@@ -301,11 +330,11 @@ async function mineStone() {
             bot.registry.blocksByName.stone?.id,
             bot.registry.blocksByName.cobblestone?.id,
         ].filter(id => id !== undefined),
-        maxDistance: 16,
-        count: 5
+        maxDistance: 8, // Shorter range
+        count: 3 // Fewer blocks
     });
     
-    if (stones.length > 0) {
+    if (stones.length > 0 && Math.random() < 0.4) { // Only 40% chance to mine
         const targetStone = stones[0];
         
         try {
@@ -320,15 +349,29 @@ async function mineStone() {
                 
                 await bot.dig(block);
                 logger.info(`⛏️ Mined ${block.name}`);
+                botState.lastMined = Date.now();
                 
-                if (Math.random() < 0.3) {
-                    sendIntelligentChat('mining some stone, making progress!');
+                // Much less chat spam
+                if (Math.random() < 0.1) {
+                    const miningMessages = [
+                        'found some good stone here!',
+                        'these blocks are perfect for building',
+                        'mining is relaxing, but exploring is more fun!',
+                        'gathering resources for future projects'
+                    ];
+                    sendIntelligentChat(miningMessages[Math.floor(Math.random() * miningMessages.length)]);
+                }
+                
+                // Often switch to exploring after mining
+                if (Math.random() < 0.6) {
+                    botState.currentTask = 'exploring';
                 }
             }
         } catch (error) {
             logger.debug(`Failed to mine stone: ${error.message}`);
         }
     } else {
+        // More likely to explore instead of mine
         intelligentMovement();
     }
 }
@@ -436,11 +479,20 @@ function naturalLooking() {
 }
 
 function handlePlayerChat(username, message) {
+    // Skip if bot is the sender
+    if (username === bot.username) return;
+    
     const lowerMessage = message.toLowerCase();
     const currentTime = Date.now();
     
-    // Don't respond too frequently
-    if (currentTime - botState.lastChatTime < 3000) return;
+    // Log all player messages for debugging
+    logger.info(`📢 Player message from ${username}: "${message}"`);
+    
+    // Reduce chat cooldown to be more responsive
+    if (currentTime - botState.lastChatTime < 1500) {
+        logger.debug('Chat cooldown active, skipping response');
+        return;
+    }
     
     // More natural and human-like responses
     const responses = {
@@ -529,13 +581,26 @@ function handlePlayerChat(username, message) {
     // Check for keyword responses with higher response rate
     for (const [keyword, responseFunc] of Object.entries(responses)) {
         if (lowerMessage.includes(keyword)) {
-            if (Math.random() < 0.75) { // 75% chance to respond
+            if (Math.random() < 0.85) { // 85% chance to respond to player messages
                 setTimeout(() => {
                     sendIntelligentChat(responseFunc());
-                }, 1000 + Math.random() * 2000);
+                }, 500 + Math.random() * 1500); // Faster response
             }
-            break;
+            return; // Found a response, exit early
         }
+    }
+    
+    // Generic response to any player message (20% chance)
+    if (Math.random() < 0.2) {
+        const genericReplies = [
+            `interesting point ${username}!`,
+            `i see what you mean ${username}`,
+            `that sounds cool ${username}!`,
+            `nice one ${username}!`
+        ];
+        setTimeout(() => {
+            sendIntelligentChat(genericReplies[Math.floor(Math.random() * genericReplies.length)]);
+        }, 800 + Math.random() * 2000);
     }
 }
 
