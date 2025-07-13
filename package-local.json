@@ -1,0 +1,21 @@
+{
+  "name": "minecraft-ai-bot-24-7",
+  "version": "1.0.0",
+  "description": "24/7 AI Minecraft Bot with advanced player interaction and task following",
+  "main": "ai-bot.js",
+  "scripts": {
+    "start": "node ai-bot.js",
+    "dev": "node ai-bot.js",
+    "bot": "node ai-bot.js"
+  },
+  "keywords": ["minecraft", "bot", "ai", "24/7", "mineflayer"],
+  "author": "AI Developer",
+  "license": "MIT",
+  "dependencies": {
+    "mineflayer": "^4.20.1",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
