@@ -8,6 +8,14 @@ This project is a Minecraft bot built using the mineflayer library. The bot conn
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+- ✅ Complete 24/7 Minecraft bot implementation (July 13, 2025)
+- ✅ All dependencies properly installed (mineflayer, winston)
+- ✅ Human-like behaviors: movement, block breaking, chat, anti-idle
+- ✅ Comprehensive README with usage instructions
+- ✅ Bot tested and verified working
+
 ## System Architecture
 
 The application follows a modular, event-driven architecture built on Node.js:

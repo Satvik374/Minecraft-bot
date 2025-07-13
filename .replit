@@ -13,19 +13,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Minecraft Bot"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "minecraft_bot_test"
-
-[[workflows.workflow]]
-name = "Minecraft Bot"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm install mineflayer winston && node start.js"
 
 [[workflows.workflow]]
 name = "minecraft_bot_test"
