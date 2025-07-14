@@ -19,6 +19,10 @@ args = "minecraft_bot_test"
 task = "workflow.run"
 args = "Database Bot"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Test Bot Arrival"
+
 [[workflows.workflow]]
 name = "minecraft_bot_test"
 author = "agent"
@@ -36,6 +40,19 @@ task = "shell.exec"
 args = "MINECRAFT_HOST=GANG_WARS.aternos.me MINECRAFT_PORT=50466 MINECRAFT_USERNAME=AIPlayer node bot-with-database.js"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "Test Bot Arrival"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node test-bot-arrival.js"
+waitForPort = 5001
+
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000

@@ -9,17 +9,34 @@ const OpenAI = require('openai');
 let storage = null;
 try {
     if (process.env.DATABASE_URL) {
-        storage = require('./server/storage').storage;
+        // Try to require the compiled JavaScript version first, then TypeScript
+        try {
+            storage = require('./server/storage.js').storage;
+        } catch (jsError) {
+            console.log('⚠️  Database TypeScript files need compilation, running without database');
+            storage = null;
+        }
     }
 } catch (error) {
-    // Database not available, continue without it
+    console.log('⚠️  Database not available, continuing without database logging');
     storage = null;
 }
 
 // Initialize OpenAI for ChatGPT integration  
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
+let openai = null;
+try {
+    if (process.env.OPENAI_API_KEY) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY
+        });
+        console.log('✅ OpenAI initialized successfully');
+    } else {
+        console.log('⚠️  No OPENAI_API_KEY found, running without ChatGPT integration');
+    }
+} catch (error) {
+    console.log('⚠️  OpenAI initialization failed:', error.message);
+    openai = null;
+}
 
 // Chat history for context
 const chatHistory = new Map(); // playerName -> array of messages
@@ -78,7 +95,9 @@ let botStatus = {
     uptime: Date.now(),
     totalSessions: 0,
     totalChatMessages: 0,
-    totalPlayersInteracted: 0
+    totalPlayersInteracted: 0,
+    arrivedAt: null,
+    hasArrived: false
 };
 
 // Bot statistics
@@ -254,6 +273,18 @@ const webServer = http.createServer(async (req, res) => {
             margin-bottom: 20px;
             text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
         }
+        .bot-arrived { 
+            font-size: 3em; 
+            color: #fbbf24; 
+            font-weight: bold; 
+            margin: 20px 0;
+            text-shadow: 0 0 15px rgba(251, 191, 36, 0.6);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        @keyframes glow {
+            from { text-shadow: 0 0 15px rgba(251, 191, 36, 0.6), 0 0 30px rgba(251, 191, 36, 0.4); }
+            to { text-shadow: 0 0 25px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.6); }
+        }
         .status { 
             font-size: 1.5em; 
             margin: 20px 0;
@@ -306,6 +337,11 @@ const webServer = http.createServer(async (req, res) => {
     <div class="container">
         <div class="alive pulse">Alive!</div>
         
+        ${botStatus.hasArrived && botStatus.isRunning ? 
+            '<div class="bot-arrived">🎉 Bot Has Arrived! 🎉</div>' : 
+            ''
+        }
+        
         <div class="status">
             ${botStatus.isRunning ? '🟢 Bot Online' : '🔴 Bot Reconnecting'}
         </div>
@@ -314,6 +350,7 @@ const webServer = http.createServer(async (req, res) => {
             <strong>Bot:</strong> ${botStatus.currentUsername}<br>
             <strong>Server:</strong> ${botStatus.serverHost}:${botStatus.serverPort}<br>
             <strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>
+            ${botStatus.arrivedAt ? `<strong>Arrived:</strong> ${botStatus.arrivedAt.toLocaleString()}<br>` : ''}
             <strong>ChatGPT:</strong> ${process.env.OPENAI_API_KEY ? 'Enabled' : 'Disabled'}<br>
             <strong>Keep-Alive:</strong> ${keepAliveStatus ? 'Active' : 'Standby'}<br>
             <strong>Last Update:</strong> ${now.toLocaleString()}
@@ -543,6 +580,12 @@ function updateBotStatus(isConnected) {
     botStatus.lastSeen = new Date().toISOString();
     botStatus.currentUsername = currentUsername;
     
+    // Reset arrival status when disconnecting
+    if (!isConnected) {
+        botStatus.hasArrived = false;
+        botStatus.arrivedAt = null;
+    }
+    
     // Update server status in database
     updateServerStatus(isConnected, isConnected ? 1 : 0);
 }
@@ -614,6 +657,10 @@ function createBot() {
         reconnectAttempts = 0;
         isReconnecting = false;
         updateBotStatus(true);
+        
+        // Mark bot as arrived for preview display
+        botStatus.hasArrived = true;
+        botStatus.arrivedAt = new Date();
         
         // Create database session
         await createBotSession();
@@ -855,6 +902,18 @@ function scheduleReconnect() {
 
 // ChatGPT integration function
 async function getChatGPTResponse(playerName, message) {
+    if (!openai) {
+        // Return fallback response if OpenAI is not available
+        const fallbackResponses = [
+            `hey ${playerName}! how are you doing?`,
+            `hi ${playerName}! what's up?`,
+            `cool ${playerName}! tell me more`,
+            `awesome ${playerName}! that sounds fun!`,
+            `nice ${playerName}! what are you building?`
+        ];
+        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
+    
     try {
         // Get or create chat history for this player
         if (!chatHistory.has(playerName)) {
