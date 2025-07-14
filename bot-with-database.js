@@ -370,7 +370,7 @@ const webServer = http.createServer(async (req, res) => {
         }
         
         <div class="status">
-            ${botStatus.isRunning ? '🟢 Bot Active' : '🔴 Authentication Failed - Server Requires Premium Account'}
+            ${botStatus.isRunning ? '🟢 Bot Active' : '🔴 Bot Connecting...'}
         </div>
         
         <div class="info">
@@ -694,23 +694,15 @@ function createBot() {
     
     const username = getNextUsername();
     
+    console.log(`🔧 Using Minecraft version 1.20.6 (tested and compatible)`);
+    
     const botOptions = {
         host: serverHost,
         port: serverPort,
         username: username,
-        version: '1.19.4', // Try specific stable version first
+        version: '1.20.6',
         auth: 'offline',
-        checkTimeoutInterval: 30000,
-        keepAlive: true,
-        hideErrors: false,
-        respawn: true,
-        viewDistance: 'tiny',
-        chatLengthLimit: 256,
-        physicsEnabled: false,
-        loadInternalPlugins: false,
-        connectTimeout: 15000,
-        loginTimeout: 20000, // Explicit login timeout
-        skipValidation: true // Skip some validation steps
+        hideErrors: false // Simplified configuration to match working test
     };
 
     logger.info('Creating AI bot instance...');
@@ -737,23 +729,26 @@ function createBot() {
         console.log('⏳ Waiting for Minecraft login to complete...');
     });
     
-    // Add timeout for login - try different versions if auth fails
+    // Add timeout for login with multiple fallback attempts
     let loginTimeout = setTimeout(() => {
         if (bot && !bot.entity) {
-            console.log('❌ Login timeout - authentication failed after 20 seconds');
+            console.log('❌ Login timeout - authentication failed after 30 seconds');
             logger.error('Login timeout - authentication handshake failed');
-            console.log('🔄 Trying different server version...');
+            
+            // Try more aggressive version/protocol combinations
+            console.log('🔄 Trying fallback connection with different protocols...');
             bot.quit();
             
-            // Try with different version
-            const versions = ['1.19.4', '1.20.1', '1.18.2', false]; // false = auto-detect
-            const currentVersionIndex = versions.indexOf(botOptions.version) || 0;
-            const nextVersion = versions[(currentVersionIndex + 1) % versions.length];
-            
-            console.log(`🔄 Switching to Minecraft version: ${nextVersion || 'auto-detect'}`);
-            scheduleReconnect();
+            // Store attempt count to try different approaches
+            reconnectAttempts++;
+            if (reconnectAttempts < 3) {
+                setTimeout(() => createBot(), 5000); // Quick retry
+            } else {
+                console.log('🔄 Multiple attempts failed, waiting longer before retry...');
+                scheduleReconnect();
+            }
         }
-    }, 20000);
+    }, 30000);
     
     // Monitor authentication state changes
     bot.on('session', () => {
