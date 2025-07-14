@@ -51,6 +51,8 @@ if (hasDatabase) {
 
 console.log('='.repeat(60));
 console.log('🤖 AI Minecraft Bot + Database + Web Server');
+console.log('⚠️  SINGLE BOT MODE: Only 1 bot connects at a time');
+console.log('🔄 When banned → 1 new bot with different username');
 console.log('='.repeat(60));
 
 // Parse command line arguments
@@ -617,6 +619,17 @@ function getNextUsername() {
 }
 
 function createBot() {
+    // Ensure only one bot exists at a time
+    if (bot && typeof bot.quit === 'function') {
+        console.log('🔄 Cleaning up existing bot instance...');
+        try {
+            bot.quit();
+        } catch (error) {
+            logger.debug(`Error cleaning up bot: ${error.message}`);
+        }
+        bot = null;
+    }
+    
     const username = getNextUsername();
     
     const botOptions = {
@@ -637,6 +650,7 @@ function createBot() {
 
     logger.info('Creating AI bot instance...');
     console.log(`🔗 Attempting connection to ${serverHost}:${serverPort} with username ${username}`);
+    console.log(`🤖 Only 1 bot will connect at a time (current attempt: ${reconnectAttempts + 1})`);
     bot = mineflayer.createBot(botOptions);
     
     // Backup movement activation - start after connection regardless of spawn event
@@ -840,9 +854,14 @@ function createBot() {
         if (isBanned) {
             logger.warn(`🚫 Detected ban! Reason: ${reason}`);
             logger.info(`🔄 Will reconnect with different username...`);
+            console.log(`🚫 Bot ${currentUsername} was BANNED: ${reason}`);
+            console.log(`🔄 Only 1 new bot will reconnect with different username`);
             
             // Log banned username
             await logUsernameUsage(currentUsername, true, reason);
+        } else {
+            console.log(`👢 Bot ${currentUsername} was kicked (not banned): ${reason}`);
+            console.log(`🔄 Only 1 bot will reconnect with same username pool`);
         }
         
         updateBotStatus(false);
