@@ -890,7 +890,7 @@ function startKeepAliveActivities() {
     // Clear any existing intervals
     clearKeepAliveIntervals();
     
-    // Movement keep-alive (every 20-40 seconds)
+    // Movement Pattern: 3 seconds random movement/sprint every 5 seconds
     const moveInterval = setInterval(() => {
         if (!bot || !bot.entity) {
             clearInterval(moveInterval);
@@ -898,42 +898,58 @@ function startKeepAliveActivities() {
         }
         
         try {
-            const actions = [
-                () => {
-                    // Jump
-                    bot.setControlState('jump', true);
-                    setTimeout(() => {
-                        if (bot) bot.setControlState('jump', false);
-                    }, 150);
-                },
-                () => {
-                    // Short movement
-                    const directions = ['forward', 'back', 'left', 'right'];
-                    const direction = directions[Math.floor(Math.random() * directions.length)];
-                    bot.setControlState(direction, true);
-                    setTimeout(() => {
-                        if (bot) bot.setControlState(direction, false);
-                    }, 300);
-                },
-                () => {
-                    // Crouch toggle
-                    bot.setControlState('sneak', true);
-                    setTimeout(() => {
-                        if (bot) bot.setControlState('sneak', false);
-                    }, 200);
-                }
-            ];
+            // Random movement direction
+            const movements = ['forward', 'back', 'left', 'right'];
+            const randomMovement = movements[Math.floor(Math.random() * movements.length)];
             
-            const action = actions[Math.floor(Math.random() * actions.length)];
-            action();
+            // Random sprint chance (50%)
+            const shouldSprint = Math.random() > 0.5;
+            
+            // Start movement
+            bot.setControlState(randomMovement, true);
+            if (shouldSprint) {
+                bot.setControlState('sprint', true);
+                logger.debug(`🏃 Keep-alive: Sprint ${randomMovement} for 3 seconds`);
+            } else {
+                logger.debug(`🚶 Keep-alive: Move ${randomMovement} for 3 seconds`);
+            }
+            
+            // Stop movement after 3 seconds
+            setTimeout(() => {
+                if (bot) {
+                    bot.setControlState(randomMovement, false);
+                    if (shouldSprint) {
+                        bot.setControlState('sprint', false);
+                    }
+                }
+            }, 3000);
             
         } catch (error) {
             logger.debug(`Keep-alive movement error: ${error.message}`);
         }
-    }, 20000 + Math.random() * 20000);
+    }, 5000); // Every 5 seconds
     keepAliveIntervals.push(moveInterval);
 
-    // Look around keep-alive (every 10-20 seconds)
+    // Jump Pattern: Every 15 seconds
+    const jumpInterval = setInterval(() => {
+        if (!bot || !bot.entity) {
+            clearInterval(jumpInterval);
+            return;
+        }
+        
+        try {
+            bot.setControlState('jump', true);
+            setTimeout(() => {
+                if (bot) bot.setControlState('jump', false);
+            }, 500);
+            logger.debug('🦘 Keep-alive: Jump');
+        } catch (error) {
+            logger.debug(`Keep-alive jump error: ${error.message}`);
+        }
+    }, 15000); // Every 15 seconds
+    keepAliveIntervals.push(jumpInterval);
+
+    // Camera Movement: Every 2 seconds
     const lookInterval = setInterval(() => {
         if (!bot || !bot.entity) {
             clearInterval(lookInterval);
@@ -941,13 +957,15 @@ function startKeepAliveActivities() {
         }
         
         try {
-            const yaw = Math.random() * Math.PI * 2;
-            const pitch = (Math.random() - 0.5) * 0.8;
+            // Random camera movement
+            const yaw = Math.random() * Math.PI * 2; // Random direction (0-360 degrees)
+            const pitch = (Math.random() - 0.5) * 0.6; // Random up/down (-0.3 to 0.3 radians)
             bot.look(yaw, pitch);
+            logger.debug('👀 Keep-alive: Camera movement');
         } catch (error) {
-            logger.debug(`Keep-alive look error: ${error.message}`);
+            logger.debug(`Keep-alive camera error: ${error.message}`);
         }
-    }, 10000 + Math.random() * 10000);
+    }, 2000); // Every 2 seconds
     keepAliveIntervals.push(lookInterval);
     
     // Inventory keep-alive (every 60-120 seconds)
@@ -999,6 +1017,7 @@ function startKeepAliveActivities() {
         try {
             const uptime = Math.floor((Date.now() - sessionStats.startTime) / 1000);
             logger.info(`🔄 Keep-alive: Bot healthy, uptime ${Math.floor(uptime/60)}m`);
+            logger.info(`🎮 Movement patterns: 3s movement every 5s, jump every 15s, camera every 2s`);
             
             // Update bot status
             updateBotStatus(true);
@@ -1009,7 +1028,10 @@ function startKeepAliveActivities() {
     }, 300000); // 5 minutes
     keepAliveIntervals.push(healthInterval);
 
-    logger.info('🔄 Enhanced keep-alive system started');
+    logger.info('🔄 Enhanced keep-alive system started with precise movement patterns');
+    logger.info('🎮 Movement: 3s random direction/sprint every 5s');
+    logger.info('🦘 Jump: Every 15 seconds');
+    logger.info('👀 Camera: Every 2 seconds');
 }
 
 function clearKeepAliveIntervals() {
