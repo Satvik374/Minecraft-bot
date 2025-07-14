@@ -233,6 +233,24 @@ const webServer = http.createServer(async (req, res) => {
         return;
     }
     
+    // Debug endpoint to check bot status
+    if (url === '/debug') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        const debugInfo = {
+            botExists: !!bot,
+            botEntityExists: !!(bot && bot.entity),
+            botStatusRunning: botStatus.isRunning,
+            currentUsername: currentUsername,
+            botStatusUsername: botStatus.currentUsername,
+            hasArrived: botStatus.hasArrived,
+            arrivedAt: botStatus.arrivedAt,
+            isReconnecting: isReconnecting,
+            reconnectAttempts: reconnectAttempts
+        };
+        res.end(JSON.stringify(debugInfo, null, 2));
+        return;
+    }
+    
     // Keep-alive endpoint for UptimeRobot - shows "Alive!" in preview
     if (url === '/health' || url === '/ping') {
         res.writeHead(200, { 
