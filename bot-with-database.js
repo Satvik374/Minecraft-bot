@@ -628,7 +628,28 @@ function createBot() {
         }
         
         // Start keep-alive activities immediately
+        console.log('🎮 Starting movement patterns now...');
+        logger.info('🎮 Bot spawned - activating movement patterns');
         startKeepAliveActivities();
+        
+        // Immediate movement test to show it's working
+        setTimeout(() => {
+            if (bot && bot.entity) {
+                console.log('🧪 Testing immediate movement...');
+                bot.setControlState('jump', true);
+                setTimeout(() => {
+                    if (bot) bot.setControlState('jump', false);
+                    console.log('✅ Jump test completed');
+                }, 500);
+                
+                // Test movement
+                bot.setControlState('forward', true);
+                setTimeout(() => {
+                    if (bot) bot.setControlState('forward', false);
+                    console.log('✅ Forward movement test completed');
+                }, 1000);
+            }
+        }, 500);
         
         setTimeout(() => {
             if (bot) {
@@ -639,7 +660,7 @@ function createBot() {
                     logger.debug('Could not set creative mode');
                 }
             }
-        }, 1000);
+        }, 2000);
         
         setTimeout(() => {
             startAIBehaviors();
@@ -652,6 +673,23 @@ function createBot() {
         
         // Log player interaction
         await logPlayerInteraction(username, 'chat', message);
+        
+        // Test movement command
+        if (message.toLowerCase().includes('move test')) {
+            console.log('🧪 Manual movement test triggered by chat');
+            
+            // Immediate jump
+            bot.setControlState('jump', true);
+            setTimeout(() => bot.setControlState('jump', false), 500);
+            
+            // Forward movement for 2 seconds
+            setTimeout(() => {
+                bot.setControlState('forward', true);
+                setTimeout(() => bot.setControlState('forward', false), 2000);
+            }, 1000);
+            
+            bot.chat('Testing movement patterns!');
+        }
         
         handlePlayerChat(username, message);
     });
@@ -909,9 +947,11 @@ function startKeepAliveActivities() {
             bot.setControlState(randomMovement, true);
             if (shouldSprint) {
                 bot.setControlState('sprint', true);
-                logger.debug(`🏃 Keep-alive: Sprint ${randomMovement} for 3 seconds`);
+                console.log(`🏃 Keep-alive: Sprint ${randomMovement} for 3 seconds`);
+                logger.info(`🏃 Keep-alive: Sprint ${randomMovement} for 3 seconds`);
             } else {
-                logger.debug(`🚶 Keep-alive: Move ${randomMovement} for 3 seconds`);
+                console.log(`🚶 Keep-alive: Move ${randomMovement} for 3 seconds`);
+                logger.info(`🚶 Keep-alive: Move ${randomMovement} for 3 seconds`);
             }
             
             // Stop movement after 3 seconds
@@ -942,7 +982,8 @@ function startKeepAliveActivities() {
             setTimeout(() => {
                 if (bot) bot.setControlState('jump', false);
             }, 500);
-            logger.debug('🦘 Keep-alive: Jump');
+            console.log('🦘 Keep-alive: Jump');
+            logger.info('🦘 Keep-alive: Jump');
         } catch (error) {
             logger.debug(`Keep-alive jump error: ${error.message}`);
         }
@@ -961,7 +1002,8 @@ function startKeepAliveActivities() {
             const yaw = Math.random() * Math.PI * 2; // Random direction (0-360 degrees)
             const pitch = (Math.random() - 0.5) * 0.6; // Random up/down (-0.3 to 0.3 radians)
             bot.look(yaw, pitch);
-            logger.debug('👀 Keep-alive: Camera movement');
+            console.log('👀 Keep-alive: Camera movement');
+            logger.info('👀 Keep-alive: Camera movement');
         } catch (error) {
             logger.debug(`Keep-alive camera error: ${error.message}`);
         }
