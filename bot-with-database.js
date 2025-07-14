@@ -224,6 +224,13 @@ const webServer = http.createServer(async (req, res) => {
     const url = req.url;
     const now = new Date();
     
+    // Root route - redirect to health page for preview tab
+    if (url === '/') {
+        res.writeHead(302, { 'Location': '/health' });
+        res.end();
+        return;
+    }
+    
     // Keep-alive endpoint for UptimeRobot - shows "Alive!" in preview
     if (url === '/health' || url === '/ping') {
         res.writeHead(200, { 
