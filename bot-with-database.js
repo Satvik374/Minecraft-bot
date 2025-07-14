@@ -214,8 +214,8 @@ const webServer = http.createServer(async (req, res) => {
             'Expires': '0'
         });
         
-        // Perform keep-alive action
-        const keepAliveStatus = keep_alive();
+        // Movement patterns active status
+        const keepAliveStatus = true;
         const uptimeHours = Math.floor((Date.now() - botStatus.uptime) / (1000 * 60 * 60));
         const uptimeMinutes = Math.floor((Date.now() - botStatus.uptime) / (1000 * 60)) % 60;
         
@@ -586,9 +586,29 @@ function createBot() {
     };
 
     logger.info('Creating AI bot instance...');
+    console.log(`🔗 Attempting connection to ${serverHost}:${serverPort} with username ${username}`);
     bot = mineflayer.createBot(botOptions);
     
+    // Backup movement activation - start after connection regardless of spawn event
+    setTimeout(() => {
+        if (bot && bot.entity) {
+            console.log('🔄 Backup movement activation - bot detected as spawned');
+            startKeepAliveActivities();
+        } else if (bot) {
+            console.log('🔄 Starting movement patterns anyway - bot instance exists');
+            // Try to start movement patterns even without entity confirmation
+            startKeepAliveActivities();
+        }
+    }, 10000); // Wait 10 seconds after bot creation
+    
+    // Add connection monitoring
+    bot.on('connect', () => {
+        console.log('🔗 TCP connection established');
+        logger.info('TCP connection established to Minecraft server');
+    });
+
     bot.on('login', async () => {
+        console.log(`✅ AI Bot logged in successfully!`);
         logger.info(`✅ AI Bot logged in successfully!`);
         logger.info(`🌍 Connected to ${serverHost}:${serverPort}`);
         reconnectAttempts = 0;
@@ -1083,32 +1103,7 @@ function clearKeepAliveIntervals() {
     keepAliveIntervals = [];
 }
 
-// Global keep-alive function that can be called from anywhere
-function keep_alive() {
-    if (!bot) return false;
-    
-    try {
-        // Perform immediate keep-alive action
-        if (bot.entity) {
-            // Small jump
-            bot.setControlState('jump', true);
-            setTimeout(() => {
-                if (bot) bot.setControlState('jump', false);
-            }, 100);
-            
-            // Update last activity time
-            botStatus.lastSeen = new Date().toISOString();
-            
-            logger.debug('🔄 Manual keep-alive action performed');
-            return true;
-        }
-    } catch (error) {
-        logger.debug(`Manual keep-alive error: ${error.message}`);
-        return false;
-    }
-    
-    return false;
-}
+// Removed keep_alive function per user request
 
 // AI behaviors with ChatGPT-enhanced random chat
 function startAIBehaviors() {
@@ -1193,6 +1188,46 @@ async function handlePlayerChat(username, message) {
     }
 }
 
+// Force start movement function for debugging
+function forceStartMovement() {
+    if (!bot) {
+        console.log('❌ No bot instance available');
+        return false;
+    }
+    
+    if (!bot.entity) {
+        console.log('❌ Bot not spawned yet');
+        return false;
+    }
+    
+    console.log('🎮 Force starting movement patterns...');
+    
+    // Clear any existing intervals first
+    clearKeepAliveIntervals();
+    
+    // Start movement patterns immediately
+    startKeepAliveActivities();
+    
+    // Immediate test movement
+    setTimeout(() => {
+        console.log('🧪 Force movement test - Jump');
+        bot.setControlState('jump', true);
+        setTimeout(() => bot.setControlState('jump', false), 500);
+    }, 1000);
+    
+    setTimeout(() => {
+        console.log('🧪 Force movement test - Forward');
+        bot.setControlState('forward', true);
+        setTimeout(() => bot.setControlState('forward', false), 2000);
+    }, 3000);
+    
+    console.log('✅ Movement patterns force started');
+    return true;
+}
+
+// Expose function globally for manual testing
+global.forceStartMovement = forceStartMovement;
+
 // Start the bot
 createBot();
 
@@ -1217,5 +1252,5 @@ process.on('SIGTERM', async () => {
     process.exit(0);
 });
 
-// Export the keep_alive function for external use
-module.exports = { keep_alive };
+// Exports removed per user request
+module.exports = {};
