@@ -205,15 +205,162 @@ const webServer = http.createServer(async (req, res) => {
     const url = req.url;
     const now = new Date();
     
-    // Main health check for UptimeRobot
+    // Keep-alive endpoint for UptimeRobot - shows "Alive!" in preview
     if (url === '/health' || url === '/ping') {
         res.writeHead(200, { 
-            'Content-Type': 'text/plain',
+            'Content-Type': 'text/html',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0'
         });
-        res.end('OK - Bot & Database Active');
+        
+        // Perform keep-alive action
+        const keepAliveStatus = keep_alive();
+        const uptimeHours = Math.floor((Date.now() - botStatus.uptime) / (1000 * 60 * 60));
+        const uptimeMinutes = Math.floor((Date.now() - botStatus.uptime) / (1000 * 60)) % 60;
+        
+        const response = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Alive! - Minecraft Bot Monitor</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container { 
+            background: rgba(255,255,255,0.1); 
+            padding: 40px; 
+            border-radius: 20px; 
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 600px;
+        }
+        .alive { 
+            font-size: 4em; 
+            color: #4ade80; 
+            font-weight: bold; 
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+        .status { 
+            font-size: 1.5em; 
+            margin: 20px 0;
+            color: ${botStatus.isRunning ? '#4ade80' : '#f87171'};
+        }
+        .info { 
+            background: rgba(255,255,255,0.1); 
+            padding: 20px; 
+            border-radius: 10px; 
+            margin: 20px 0;
+            font-size: 1.1em;
+        }
+        .url-box { 
+            background: rgba(0,0,0,0.3); 
+            padding: 15px; 
+            border-radius: 10px; 
+            font-family: monospace; 
+            word-break: break-all; 
+            margin: 10px 0;
+            font-size: 1.2em;
+            border: 2px solid #4ade80;
+        }
+        .pulse { 
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .stats { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 15px; 
+            margin: 20px 0;
+        }
+        .stat { 
+            background: rgba(255,255,255,0.1); 
+            padding: 15px; 
+            border-radius: 10px;
+        }
+        .stat-value { 
+            font-size: 2em; 
+            font-weight: bold; 
+            color: #4ade80;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="alive pulse">Alive!</div>
+        
+        <div class="status">
+            ${botStatus.isRunning ? '🟢 Bot Online' : '🔴 Bot Reconnecting'}
+        </div>
+        
+        <div class="info">
+            <strong>Bot:</strong> ${botStatus.currentUsername}<br>
+            <strong>Server:</strong> ${botStatus.serverHost}:${botStatus.serverPort}<br>
+            <strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>
+            <strong>ChatGPT:</strong> ${process.env.OPENAI_API_KEY ? 'Enabled' : 'Disabled'}<br>
+            <strong>Keep-Alive:</strong> ${keepAliveStatus ? 'Active' : 'Standby'}<br>
+            <strong>Last Update:</strong> ${now.toLocaleString()}
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">${botStatus.totalSessions}</div>
+                <div>Sessions</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">${botStatus.totalChatMessages + sessionStats.chatMessagesSent}</div>
+                <div>Messages</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">${sessionStats.playersInteracted.size}</div>
+                <div>Players</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">${reconnectAttempts}</div>
+                <div>Reconnects</div>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h3>🔗 UptimeRobot Monitor Setup</h3>
+            <p><strong>Copy this URL for UptimeRobot:</strong></p>
+            <div class="url-box">https://${req.headers.host}/health</div>
+            <p><strong>Monitor Settings:</strong></p>
+            <ul style="text-align: left; margin: 10px 0;">
+                <li>Monitor Type: HTTP(s)</li>
+                <li>URL: Use the URL above</li>
+                <li>Monitoring Interval: 5 minutes</li>
+                <li>Keyword Monitoring: "Alive!"</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-refresh every 30 seconds
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>
+        `;
+        
+        res.end(response);
         return;
     }
     
