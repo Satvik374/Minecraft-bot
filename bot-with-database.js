@@ -352,7 +352,7 @@ const webServer = http.createServer(async (req, res) => {
         }
         
         <div class="status">
-            ${botStatus.isRunning ? '🟢 Bot Online' : '🔴 Bot Reconnecting'}
+            ${botStatus.isRunning ? '🟢 Bot Active' : '🔴 Bot Reconnecting'}
         </div>
         
         <div class="info">
@@ -589,8 +589,13 @@ function updateBotStatus(isConnected) {
     botStatus.lastSeen = new Date().toISOString();
     botStatus.currentUsername = currentUsername;
     
-    // Reset arrival status when disconnecting
-    if (!isConnected) {
+    if (isConnected) {
+        console.log(`🟢 Status updated: Bot is ACTIVE - Preview will show "Bot Active"`);
+        logger.info(`Bot status: ACTIVE`);
+    } else {
+        console.log(`🔴 Status updated: Bot disconnected - Preview will show "Bot Reconnecting"`);
+        logger.info(`Bot status: DISCONNECTED`);
+        // Reset arrival status when disconnecting
         botStatus.hasArrived = false;
         botStatus.arrivedAt = null;
     }
@@ -669,12 +674,14 @@ function createBot() {
     bot.on('connect', () => {
         console.log('🔗 TCP connection established');
         logger.info('TCP connection established to Minecraft server');
+        console.log('⏳ Waiting for Minecraft login to complete...');
     });
 
     bot.on('login', async () => {
         console.log(`✅ AI Bot logged in successfully!`);
         logger.info(`✅ AI Bot logged in successfully!`);
         logger.info(`🌍 Connected to ${serverHost}:${serverPort}`);
+        console.log(`🟢 Bot is now ACTIVE - Preview will show "Bot Active"`);
         reconnectAttempts = 0;
         isReconnecting = false;
         updateBotStatus(true);
