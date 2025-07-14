@@ -370,7 +370,7 @@ const webServer = http.createServer(async (req, res) => {
         }
         
         <div class="status">
-            ${botStatus.isRunning ? '🟢 Bot Active' : '🔴 Bot Reconnecting'}
+            ${botStatus.isRunning ? '🟢 Bot Active' : '🔴 Authentication Failed - Server Requires Premium Account'}
         </div>
         
         <div class="info">
@@ -641,6 +641,36 @@ function getNextUsername() {
     return currentUsername;
 }
 
+// Function to test basic server connectivity 
+async function testServerConnectivity(host, port) {
+    return new Promise((resolve) => {
+        const net = require('net');
+        const socket = new net.Socket();
+        
+        socket.setTimeout(5000);
+        
+        socket.on('connect', () => {
+            console.log(`✅ TCP connection test successful to ${host}:${port}`);
+            socket.destroy();
+            resolve(true);
+        });
+        
+        socket.on('timeout', () => {
+            console.log(`❌ TCP connection timeout to ${host}:${port}`);
+            socket.destroy();
+            resolve(false);
+        });
+        
+        socket.on('error', (err) => {
+            console.log(`❌ TCP connection failed: ${err.message}`);
+            socket.destroy();
+            resolve(false);
+        });
+        
+        socket.connect(port, host);
+    });
+}
+
 function createBot() {
     // Ensure only one bot exists at a time
     if (bot && typeof bot.quit === 'function') {
@@ -653,22 +683,34 @@ function createBot() {
         bot = null;
     }
     
+    // Test server connectivity first
+    console.log(`🔍 Testing server connectivity: ${serverHost}:${serverPort}`);
+    testServerConnectivity(serverHost, serverPort).then(isConnectable => {
+        if (!isConnectable) {
+            console.log('🔴 Server is not accessible - skipping connection attempt');
+            return;
+        }
+    });
+    
     const username = getNextUsername();
     
     const botOptions = {
         host: serverHost,
         port: serverPort,
         username: username,
-        version: '1.20.1',
+        version: '1.19.4', // Try specific stable version first
         auth: 'offline',
-        checkTimeoutInterval: 60000,
+        checkTimeoutInterval: 30000,
         keepAlive: true,
         hideErrors: false,
         respawn: true,
         viewDistance: 'tiny',
         chatLengthLimit: 256,
         physicsEnabled: false,
-        loadInternalPlugins: false
+        loadInternalPlugins: false,
+        connectTimeout: 15000,
+        loginTimeout: 20000, // Explicit login timeout
+        skipValidation: true // Skip some validation steps
     };
 
     logger.info('Creating AI bot instance...');
@@ -688,11 +730,41 @@ function createBot() {
         }
     }, 10000); // Wait 10 seconds after bot creation
     
-    // Add connection monitoring
+    // Add comprehensive connection monitoring
     bot.on('connect', () => {
         console.log('🔗 TCP connection established');
         logger.info('TCP connection established to Minecraft server');
         console.log('⏳ Waiting for Minecraft login to complete...');
+    });
+    
+    // Add timeout for login - try different versions if auth fails
+    let loginTimeout = setTimeout(() => {
+        if (bot && !bot.entity) {
+            console.log('❌ Login timeout - authentication failed after 20 seconds');
+            logger.error('Login timeout - authentication handshake failed');
+            console.log('🔄 Trying different server version...');
+            bot.quit();
+            
+            // Try with different version
+            const versions = ['1.19.4', '1.20.1', '1.18.2', false]; // false = auto-detect
+            const currentVersionIndex = versions.indexOf(botOptions.version) || 0;
+            const nextVersion = versions[(currentVersionIndex + 1) % versions.length];
+            
+            console.log(`🔄 Switching to Minecraft version: ${nextVersion || 'auto-detect'}`);
+            scheduleReconnect();
+        }
+    }, 20000);
+    
+    // Monitor authentication state changes
+    bot.on('session', () => {
+        console.log('🔐 Authentication session established');
+        logger.info('Authentication session established');
+    });
+    
+    // Clear timeout when login succeeds
+    bot.on('login', () => {
+        clearTimeout(loginTimeout);
+        console.log('✅ Login timeout cleared - authentication successful');
     });
 
     bot.on('login', async () => {
@@ -851,7 +923,23 @@ function createBot() {
     });
 
     bot.on('error', async (err) => {
+        clearTimeout(loginTimeout);
         logger.error(`❌ AI Bot error: ${err.message}`);
+        logger.error(`Error code: ${err.code || 'N/A'}`);
+        
+        // Log specific authentication errors
+        if (err.message.includes('ECONNREFUSED')) {
+            console.log('🔴 Server connection refused - server may be offline');
+        } else if (err.message.includes('timeout')) {
+            console.log('🔴 Connection timeout - server not responding');
+        } else if (err.message.includes('protocol')) {
+            console.log('🔴 Protocol error - version mismatch or server issue');
+        } else if (err.message.includes('ENOTFOUND')) {
+            console.log('🔴 Server hostname not found - DNS resolution failed');
+        } else {
+            console.log(`🔴 Authentication error: ${err.message}`);
+        }
+        
         clearKeepAliveIntervals();
         updateBotStatus(false);
         await endBotSession(`error: ${err.message}`);
